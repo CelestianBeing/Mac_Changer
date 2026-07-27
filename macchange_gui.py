@@ -2,14 +2,31 @@
 # Disclaimer: Educational & authorized testing only
 
 import subprocess
+import sys
 import tkinter as tk
 from tkinter import ttk, messagebox
 import re
 import threading
-import winreg
 import ctypes
 import random
 import time
+
+# This tool edits the Windows registry (NetworkAddress override), so it only
+# makes sense on Windows. Importing winreg on any other OS raises ImportError
+# and crashes before the window even appears -- fail with a clear message
+# instead.
+if sys.platform != "win32":
+    _root = tk.Tk()
+    _root.withdraw()
+    messagebox.showerror(
+        "Unsupported platform",
+        "This tool only works on Windows (it edits the registry to override "
+        "each adapter's MAC address).\n\n"
+        "On Linux/macOS, use a tool like 'macchanger' or 'ip link' instead."
+    )
+    sys.exit(1)
+
+import winreg
 
 # ── palette ───────────────────────────────────────────────────────────────────
 BG      = "#0d1117"
@@ -33,7 +50,17 @@ def is_admin() -> bool:
         return False
 
 def is_valid_mac(mac: str) -> bool:
-    return bool(re.fullmatch(r"([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", mac))
+    if not re.fullmatch(r"([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", mac):
+        return False
+    first_octet = int(mac.split(":")[0], 16)
+    # Bit 0 of the first octet is the multicast flag. A real NIC address
+    # must be unicast (bit 0 = 0); otherwise Windows will reject or ignore it.
+    if first_octet & 0x01:
+        return False
+    # All-zero and broadcast addresses are never valid unicast NIC addresses.
+    if mac in ("00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"):
+        return False
+    return True
 
 def random_mac() -> str:
     b = [random.randint(0, 255) for _ in range(6)]
@@ -170,11 +197,11 @@ def get_current_mac_for(name: str) -> str:
 class MacChangerApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("MAC Changer  —  Windows 11")
+        self.title("MAC Changer - Windows 11")
         self.resizable(False, False)
         self.configure(bg=BG)
         self._interfaces: list = []
-        self._original_mac: str = ""          # saved before first change
+        self._original_macs: dict = {}        # {adapter_name: hardware_mac}, saved before first change per adapter
 
         # auto-rotate timer state
         self._timer_running  = False
@@ -187,8 +214,8 @@ class MacChangerApp(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         if not is_admin():
-            self._log("⚠  Not running as Administrator — registry writes will fail.", "err")
-            self._log("   Right-click → Run as administrator.", "err")
+            self._log("Warning: Not running as Administrator - registry writes will fail.", "err")
+            self._log("Right-click the script and choose Run as administrator.", "err")
 
     # ─── UI construction ──────────────────────────────────────────────────────
 
@@ -196,7 +223,7 @@ class MacChangerApp(tk.Tk):
         # ── header ──
         hdr = tk.Frame(self, bg=BG, pady=16)
         hdr.pack(fill="x", padx=28)
-        tk.Label(hdr, text="◈  MAC Changer", font=(SANS, 17, "bold"),
+        tk.Label(hdr, text="MAC Changer", font=(SANS, 17, "bold"),
                  bg=BG, fg=ACCENT).pack(anchor="w")
         tk.Label(hdr, text="Spoof your adapter's MAC address on Windows 11",
                  font=(SANS, 9), bg=BG, fg=MUTED).pack(anchor="w", pady=(2, 0))
@@ -215,7 +242,7 @@ class MacChangerApp(tk.Tk):
                                         width=28, state="readonly")
         self.iface_combo.pack(side="left")
         self.iface_combo.bind("<<ComboboxSelected>>", lambda _: self._on_iface_select())
-        tk.Button(irow, text="↺", command=self._refresh_interfaces,
+        tk.Button(irow, text="Refresh", command=self._refresh_interfaces,
                   bg=SURFACE, fg=MUTED, relief="flat", font=(SANS, 11),
                   activebackground=BORDER, cursor="hand2").pack(side="left", padx=(6, 0))
 
@@ -250,7 +277,7 @@ class MacChangerApp(tk.Tk):
         self.mac_entry.bind("<FocusIn>", self._clear_placeholder)
 
         # random button
-        tk.Button(card, text="⚡ Random MAC", command=self._insert_random_mac,
+        tk.Button(card, text="Random MAC", command=self._insert_random_mac,
                   bg=BORDER, fg=TEXT, relief="flat", font=(SANS, 9),
                   activebackground="#444c56", cursor="hand2", padx=8, pady=4
                   ).grid(row=5, column=1, sticky="w", padx=(10, 0), pady=(0, 6))
@@ -271,7 +298,7 @@ class MacChangerApp(tk.Tk):
         self.apply_btn.pack(side="left", fill="x", expand=True, padx=(0, 6))
 
         self.restore_btn = tk.Button(
-            btn_row, text="⟲ Restore Original", command=self._restore,
+            btn_row, text="Restore Original", command=self._restore,
             bg=BORDER, fg=WARN, relief="flat",
             font=(SANS, 9, "bold"), padx=10, pady=9,
             activebackground="#444c56", cursor="hand2"
@@ -307,7 +334,7 @@ class MacChangerApp(tk.Tk):
         unit_combo.grid(row=1, column=2, padx=(0, 10))
 
         self.timer_btn = tk.Button(
-            rot, text="▶ Start", command=self._toggle_timer,
+            rot, text="Start", command=self._toggle_timer,
             bg=SUCCESS, fg="#0d1117", relief="flat",
             font=(SANS, 9, "bold"), padx=10, pady=5,
             activebackground="#56d364", cursor="hand2"
@@ -322,7 +349,7 @@ class MacChangerApp(tk.Tk):
 
         # ── admin badge ──
         badge_color = SUCCESS if is_admin() else DANGER
-        badge_text  = "✔ Administrator" if is_admin() else "✘ Not Administrator"
+        badge_text  = "Administrator" if is_admin() else "Not Administrator"
         tk.Label(self, text=badge_text, font=(SANS, 8, "bold"),
                  bg=BG, fg=badge_color).pack(anchor="e", padx=22, pady=(4, 2))
 
@@ -373,9 +400,9 @@ class MacChangerApp(tk.Tk):
                 self.cur_mac_var.set(iface["mac"])
                 self.desc_var.set(iface["description"])
                 # snapshot original MAC first time we see this adapter
-                if not self._original_mac:
-                    self._original_mac = iface["mac"]
-                    self.orig_mac_var.set(iface["mac"])
+                if name not in self._original_macs:
+                    self._original_macs[name] = iface["mac"]
+                self.orig_mac_var.set(self._original_macs[name])
                 return
 
     def _clear_placeholder(self, _e):
@@ -385,6 +412,8 @@ class MacChangerApp(tk.Tk):
     def _insert_random_mac(self):
         self.mac_entry.delete(0, "end")
         self.mac_entry.insert(0, random_mac())
+
+    MIN_INTERVAL_SECONDS = 5  # each rotation disables/re-enables the adapter (~1.5s+); anything faster is unstable
 
     def _get_interval_seconds(self):
         try:
@@ -397,7 +426,13 @@ class MacChangerApp(tk.Tk):
             return None
         unit = self.unit_var.get()
         multiplier = {"seconds": 1, "minutes": 60, "hours": 3600}.get(unit, 1)
-        return val * multiplier
+        total = val * multiplier
+        if total < self.MIN_INTERVAL_SECONDS:
+            messagebox.showerror("Interval too short",
+                f"Minimum auto-rotate interval is {self.MIN_INTERVAL_SECONDS} seconds.\n"
+                "Shorter intervals can leave the adapter cycling before it fully reconnects.")
+            return None
+        return total
 
     # ─── core change logic (shared) ───────────────────────────────────────────
 
@@ -430,18 +465,22 @@ class MacChangerApp(tk.Tk):
                 "Please right-click the script and choose\n'Run as administrator'.")
             return
 
-        # snapshot original if not yet saved
-        if not self._original_mac:
-            self._original_mac = self.cur_mac_var.get()
-            self.orig_mac_var.set(self._original_mac)
+        # snapshot original if not yet saved (per adapter)
+        if name not in self._original_macs:
+            self._original_macs[name] = self.cur_mac_var.get()
+        self.orig_mac_var.set(self._original_macs[name])
 
         self.apply_btn.config(state="disabled", text="Applying…")
-        self._log(f"→ {name}  |  new MAC: {new_mac}", "inf")
+        self._log(f"Target: {name}  |  new MAC: {new_mac}", "inf")
         threading.Thread(target=self._apply_worker,
                          args=(name, new_mac), daemon=True).start()
 
     def _apply_worker(self, name, new_mac):
-        before, after = self._do_change(name, new_mac)
+        try:
+            before, after = self._do_change(name, new_mac)
+        except Exception as exc:
+            self.after(0, self._log, f"[!!] Unexpected error: {exc}", "err")
+            before, after = "unknown", "reg-fail"
         self.after(0, self._apply_done, before, after, name)
 
     def _apply_done(self, before, after, name):
@@ -451,9 +490,9 @@ class MacChangerApp(tk.Tk):
             messagebox.showwarning("May not have applied",
                 "MAC address may not have changed.\n\n"
                 "Some adapters require enabling 'Locally Administered Address'\n"
-                "in Device Manager → Adapter Properties → Advanced tab.")
+                "in Device Manager > Adapter Properties > Advanced tab.")
         else:
-            self._log(f"[+] Done!  {before}  →  {after}", "ok")
+            self._log(f"[+] Done!  {before}  ->  {after}", "ok")
         self.apply_btn.config(state="normal", text="Apply Change")
 
     # ─── restore button ───────────────────────────────────────────────────────
@@ -467,25 +506,28 @@ class MacChangerApp(tk.Tk):
             messagebox.showerror("Administrator required",
                 "Please right-click the script and choose\n'Run as administrator'.")
             return
-        if not self._original_mac:
+        if name not in self._original_macs:
             messagebox.showinfo("Nothing to restore",
-                "No original MAC was recorded.\n"
-                "The adapter may already have its hardware MAC.")
+                "No original MAC was recorded for this adapter.\n"
+                "It may already have its hardware MAC.")
             return
 
         self.restore_btn.config(state="disabled", text="Restoring…")
-        self._log(f"Restoring original MAC on {name}…", "warn")
+        self._log(f"Restoring original MAC on {name}...", "warn")
         threading.Thread(target=self._restore_worker,
                          args=(name,), daemon=True).start()
 
     def _restore_worker(self, name):
-        guid = get_adapter_guid(name)
         ok = False
-        if guid:
-            ok = delete_mac_registry(guid)
-            if ok:
-                disable_enable_adapter(name)
-                time.sleep(1.5)
+        try:
+            guid = get_adapter_guid(name)
+            if guid:
+                ok = delete_mac_registry(guid)
+                if ok:
+                    disable_enable_adapter(name)
+                    time.sleep(1.5)
+        except Exception as exc:
+            self.after(0, self._log, f"[!!] Unexpected error: {exc}", "err")
         self.after(0, self._restore_done, name, ok)
 
     def _restore_done(self, name, ok):
@@ -494,7 +536,7 @@ class MacChangerApp(tk.Tk):
             self._log(f"[+] Original MAC restored on {name}.", "ok")
         else:
             self._log("[!!] Restore failed — could not delete registry value.", "err")
-        self.restore_btn.config(state="normal", text="⟲ Restore Original")
+        self.restore_btn.config(state="normal", text="Restore Original")
 
     # ─── auto-rotate timer ────────────────────────────────────────────────────
 
@@ -517,15 +559,15 @@ class MacChangerApp(tk.Tk):
         if secs is None:
             return
 
-        # snapshot original before first auto-change
-        if not self._original_mac:
-            self._original_mac = self.cur_mac_var.get()
-            self.orig_mac_var.set(self._original_mac)
+        # snapshot original before first auto-change (per adapter)
+        if name not in self._original_macs:
+            self._original_macs[name] = self.cur_mac_var.get()
+        self.orig_mac_var.set(self._original_macs[name])
 
         self._timer_running  = True
         self._timer_stop_evt = threading.Event()
         self._next_change_at = time.time() + secs
-        self.timer_btn.config(text="■ Stop", bg=DANGER, activebackground="#ff7b72")
+        self.timer_btn.config(text="Stop", bg=DANGER, activebackground="#ff7b72")
         self._log(f"Auto-rotate started — every {self.interval_var.get()} "
                   f"{self.unit_var.get()}.", "inf")
 
@@ -537,7 +579,7 @@ class MacChangerApp(tk.Tk):
     def _stop_timer(self):
         self._timer_running = False
         self._timer_stop_evt.set()
-        self.timer_btn.config(text="▶ Start", bg=SUCCESS, activebackground="#56d364")
+        self.timer_btn.config(text="Start", bg=SUCCESS, activebackground="#56d364")
         self.countdown_var.set("")
         self._log("Auto-rotate stopped.", "warn")
 
@@ -547,14 +589,17 @@ class MacChangerApp(tk.Tk):
             if not self._timer_running:
                 break
             mac = random_mac()
-            self.after(0, self._log, f"[timer] Rotating to {mac} …", "inf")
-            before, after = self._do_change(name, mac)
+            self.after(0, self._log, f"[timer] Rotating to {mac} ...", "inf")
+            try:
+                before, after = self._do_change(name, mac)
+            except Exception as exc:
+                self.after(0, self._log, f"[timer] FAILED: Unexpected error: {exc}", "err")
+                before, after = "unknown", "reg-fail"
             if after not in ("no-guid", "reg-fail", "unknown") and before != after:
-                self.after(0, self._log, f"[timer] ✔  {before}  →  {after}", "ok")
+                self.after(0, self._log, f"[timer] OK: {before}  ->  {after}", "ok")
                 self.after(0, self._refresh_current_mac, name)
-                self.after(0, lambda a=after: self.cur_mac_var.set(a))
             else:
-                self.after(0, self._log, f"[timer] ✘  Change failed ({after}).", "err")
+                self.after(0, self._log, f"[timer] FAILED: Change failed ({after}).", "err")
             # reset countdown for next cycle
             self._next_change_at = time.time() + interval
 
