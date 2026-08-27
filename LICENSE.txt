@@ -1,0 +1,60 @@
+PrivacyKit End User Licence Agreement
+=====================================
+
+Copyright (c) 2026 Nilotpal Vyas. All rights reserved.
+
+1. LICENCE GRANT
+   Subject to this agreement, you are granted a non-exclusive, non-transferable
+   licence to install and use PrivacyKit on the number of machines permitted by
+   your edition. The Free edition may be used without charge, including
+   commercially. Pro and Business editions require a valid licence key.
+
+2. PERMITTED USE
+   PrivacyKit is provided for education, personal privacy, and authorised
+   security testing. You may use it only on computers and networks that you own
+   or for which you hold explicit written permission to test.
+
+3. PROHIBITED USE
+   You may not use PrivacyKit to evade network access controls, bans, licence
+   restrictions, or billing on systems you do not control; to conceal unlawful
+   activity; or in any manner that violates applicable law or the terms of
+   service of a network you connect to. Spoofing hardware identifiers may be
+   unlawful in some jurisdictions.
+
+4. RESTRICTIONS
+   You may not redistribute, resell, rent, or sublicense PrivacyKit; remove or
+   alter licensing or attribution mechanisms; or reverse engineer the software
+   except to the extent that restriction is prohibited by applicable law.
+
+5. NO WARRANTY
+   PRIVACYKIT IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+6. LIMITATION OF LIABILITY
+   PrivacyKit modifies system configuration. Although every change is recorded
+   and reversible, and destructive operations are confirmed before they run, IN
+   NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, DATA LOSS, OR
+   OTHER LIABILITY ARISING FROM THE USE OF THIS SOFTWARE.
+
+7. NO PRIVACY GUARANTEE
+   PrivacyKit reduces certain categories of exposure. It does not and cannot
+   provide anonymity. It does not defend against browser fingerprinting,
+   traffic-analysis by a global observer, malware already present on the
+   machine, or forensic examination of the disk. See section 17 of the user
+   manual for a full statement of what this software cannot protect you from.
+
+8. DATA
+   PrivacyKit performs no telemetry and transmits no usage data. Licences are
+   verified offline. The only network requests it makes are ones you trigger:
+   leak tests, blocklist updates, and Tor exit-IP checks.
+
+9. TERMINATION
+   This licence terminates automatically if you breach its terms. On
+   termination you must cease use and remove all copies.
+
+10. GOVERNING LAW
+    This agreement is governed by the laws of the jurisdiction in which the
+    author resides, without regard to conflict-of-law provisions.
+
+By installing or using PrivacyKit you agree to these terms.

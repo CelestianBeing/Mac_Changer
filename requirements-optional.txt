@@ -1,0 +1,8 @@
+# Optional. PrivacyKit works without every one of these; when present, richer
+# or faster paths light up automatically and the Dashboard shows which are
+# active.
+
+cryptography    # hardware-accelerated AES-256-GCM in the vault
+pypdf           # reading and stripping PDF metadata
+psutil          # faster connection monitor with full process paths
+requests        # marginally faster leak tests

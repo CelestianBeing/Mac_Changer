@@ -1,0 +1,4 @@
+# Needed only to produce a release build (python build.py).
+pyinstaller>=6.0
+pillow          # generates the application icon
+cryptography    # signing licences with tools/keygen.py

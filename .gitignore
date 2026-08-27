@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+*.pkv
+*.spec.bak
+_to_delete/
+build_tools/version_info.txt
+tools/vendor_private_key.pem

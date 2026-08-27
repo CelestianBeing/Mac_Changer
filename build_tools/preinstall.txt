@@ -1,0 +1,16 @@
+PrivacyKit changes real Windows settings.
+
+This is not a dashboard that reports on your configuration. It edits the
+registry, rewrites firewall rules, changes DNS servers, and modifies the hosts
+file. Those changes persist across reboots.
+
+Every change is recorded in a journal before it is applied, together with the
+exact state it replaces, and a single Panic Restore button reverts all of it.
+Deletions — cleaned traces and shredded files — are the exception and cannot be
+undone; those are always confirmed first.
+
+Use only on machines and networks you own or have explicit permission to test.
+
+Antivirus note: tools that change MAC addresses and clear forensic traces
+share behaviour with malware, so some scanners flag them. If you obtained this
+installer from an unofficial source, do not run it.
